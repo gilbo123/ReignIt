@@ -1,0 +1,67 @@
+from pathlib import Path
+
+from reignit import WIKI_BEGIN, WIKI_END
+from reignit.inject import build_wiki_block, inject_payload, resolve_workspace
+from reignit.wiki import Wiki
+
+
+def _wiki() -> Wiki:
+    return Wiki(
+        root=Path("/tmp/demo"),
+        functionality="## Modules\n\n### ui (`src/ui/`)\n",
+        history="## 2026-09-01 — started",
+    )
+
+
+def test_inject_chat_completions_prepends_system() -> None:
+    payload = {
+        "model": "llama3",
+        "messages": [{"role": "user", "content": "update the UI"}],
+    }
+    result = inject_payload(payload, "WIKI", "/v1/chat/completions")
+    assert result["messages"][0] == {"role": "system", "content": "WIKI"}
+    assert result["messages"][1]["content"] == "update the UI"
+    assert payload["messages"][0]["role"] == "user"
+
+
+def test_inject_merges_existing_system() -> None:
+    payload = {
+        "messages": [
+            {"role": "system", "content": "be concise"},
+            {"role": "user", "content": "hi"},
+        ]
+    }
+    result = inject_payload(payload, "WIKI", "/api/chat")
+    assert result["messages"][0]["content"].startswith("WIKI")
+    assert "be concise" in result["messages"][0]["content"]
+
+
+def test_inject_replaces_stale_wiki_block() -> None:
+    stale = f"{WIKI_BEGIN}\nold\n{WIKI_END}\n\nbe concise"
+    payload = {"messages": [{"role": "system", "content": stale}]}
+    result = inject_payload(payload, f"{WIKI_BEGIN}\nfresh\n{WIKI_END}", "/v1/chat/completions")
+    content = result["messages"][0]["content"]
+    assert "fresh" in content
+    assert "old" not in content
+    assert "be concise" in content
+
+
+def test_inject_generate_sets_system() -> None:
+    payload = {"model": "llama3", "prompt": "hello", "system": "base"}
+    result = inject_payload(payload, "WIKI", "/api/generate")
+    assert result["system"].startswith("WIKI")
+    assert result["prompt"] == "hello"
+
+
+def test_build_wiki_block_includes_both_files() -> None:
+    block = build_wiki_block(_wiki(), Path("/tmp/demo"))
+    assert WIKI_BEGIN in block
+    assert WIKI_END in block
+    assert "wiki/functionality.md" in block
+    assert "src/ui/" in block
+    assert "2026-09-01" in block
+
+
+def test_resolve_workspace_prefers_header() -> None:
+    resolved = resolve_workspace("/from/header", "/from/query", Path("/from/default"))
+    assert resolved == Path("/from/header").resolve()

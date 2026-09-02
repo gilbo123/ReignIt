@@ -1,0 +1,17 @@
+{
+  "models": [
+    {
+      "title": "ReignIt (Ollama via harness)",
+      "provider": "ollama",
+      "model": "qwen3.5:9b",
+      "apiBase": "http://127.0.0.1:11444"
+    },
+    {
+      "title": "ReignIt (OpenAI-compatible)",
+      "provider": "openai",
+      "model": "llama3.1",
+      "apiBase": "http://127.0.0.1:11444/v1",
+      "apiKey": "ollama"
+    }
+  ]
+}
