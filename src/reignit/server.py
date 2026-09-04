@@ -12,7 +12,14 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response, Streami
 from reignit import SKIP_WIKI_HEADER, WORKSPACE_HEADER, __version__
 from reignit.config import Settings
 from reignit.constants import HOP_BY_HOP, INJECT_PATHS
-from reignit.inject import build_wiki_block, inject_body, resolve_workspace, wiki_for_workspace
+from reignit.inject import (
+    build_wiki_block,
+    inject_body,
+    resolve_workspace,
+    strip_reignit_fields,
+    wiki_for_workspace,
+    workspace_from_body,
+)
 from reignit.wiki import load_wiki
 
 
@@ -96,15 +103,16 @@ async def _forward(app: FastAPI, request: Request, path: str) -> Response:
     method = request.method.upper()
     target_path = path if path.startswith("/") else f"/{path}"
 
-    outbound = inbound
+    outbound = strip_reignit_fields(inbound)
     if not skip_wiki and (method, target_path) in INJECT_PATHS:
         workspace = resolve_workspace(
             request.headers.get(WORKSPACE_HEADER),
             request.query_params.get("workspace"),
+            workspace_from_body(inbound),
             settings.workspace,
         )
         wiki = wiki_for_workspace(workspace)
-        outbound = inject_body(inbound, build_wiki_block(wiki, workspace), target_path)
+        outbound = inject_body(outbound, build_wiki_block(wiki, workspace), target_path)
 
     headers = _filter_headers(request.headers.items())
     url = httpx.URL(path=target_path, query=request.url.query.encode("utf-8") or None)

@@ -7,7 +7,7 @@ import typer
 
 from reignit import FUNCTIONALITY_FILE, HISTORY_FILE, WIKI_DIR, __version__
 from reignit.config import Settings
-from reignit.constants import DEFAULT_HOST, DEFAULT_OLLAMA, DEFAULT_PORT
+from reignit.constants import DEFAULT_HOST, DEFAULT_OLLAMA, DEFAULT_PORT, DEFAULT_PUBLIC_URL
 from reignit.init_project import init_wiki, refresh_wiki
 from reignit.wiki import load_wiki
 
@@ -82,9 +82,14 @@ def refresh(
 
 @app.command()
 def serve(
-    host: str = typer.Option(DEFAULT_HOST, "--host", help="Bind address."),
+    host: str = typer.Option(DEFAULT_HOST, "--host", help="Bind address (default: all interfaces)."),
     port: int = typer.Option(DEFAULT_PORT, "--port", help="Harness port."),
     ollama: str = typer.Option(DEFAULT_OLLAMA, "--ollama", help="Upstream Ollama base URL."),
+    public_url: str = typer.Option(
+        DEFAULT_PUBLIC_URL,
+        "--public-url",
+        help="URL shown in logs for clients on the LAN.",
+    ),
     workspace: Optional[Path] = typer.Option(
         None,
         "--workspace",
@@ -92,31 +97,30 @@ def serve(
         exists=True,
         file_okay=False,
         resolve_path=True,
-        help="Default project wiki to inject. Override per request with X-ReignIt-Workspace.",
+        help="Optional fallback wiki path when a request does not name one.",
     ),
 ) -> None:
-    """Serve an OpenAI- and Ollama-compatible endpoint that injects the project wiki."""
+    """Serve an OpenAI- and Ollama-compatible endpoint that injects per-request wikis."""
     settings = Settings(
         host=host,
         port=port,
         ollama=ollama,
+        public_url=public_url,
         workspace=workspace,
     )
+    typer.echo(f"Ollama:  {settings.ollama_base()}")
+    typer.echo(f"Listen:  {settings.host}:{settings.port}")
+    typer.echo(f"Clients: {settings.public_url}")
+    typer.echo("Wiki:    per request (?workspace=, X-ReignIt-Workspace, or reignit_workspace in JSON)")
     if settings.workspace:
         wiki = load_wiki(settings.workspace)
         if wiki.present:
-            typer.echo(f"Wiki: {settings.workspace / WIKI_DIR}")
+            typer.echo(f"Fallback wiki: {settings.workspace / WIKI_DIR}")
         else:
             typer.echo(
-                f"No wiki at {settings.workspace / WIKI_DIR} — run `reignit init` there.",
+                f"Fallback path has no wiki: {settings.workspace / WIKI_DIR}",
                 err=True,
             )
-    else:
-        typer.echo(
-            "No default workspace. Clients can send X-ReignIt-Workspace or ?workspace=."
-        )
-    typer.echo(f"Ollama:  {settings.ollama_base()}")
-    typer.echo(f"Harness: http://{settings.host}:{settings.port}")
     from reignit.server import run
 
     run(settings)

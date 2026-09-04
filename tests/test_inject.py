@@ -1,7 +1,14 @@
+import json
 from pathlib import Path
 
 from reignit import WIKI_BEGIN, WIKI_END
-from reignit.inject import build_wiki_block, inject_payload, resolve_workspace
+from reignit.inject import (
+    build_wiki_block,
+    inject_payload,
+    resolve_workspace,
+    strip_reignit_fields,
+    workspace_from_body,
+)
 from reignit.wiki import Wiki
 
 
@@ -63,5 +70,17 @@ def test_build_wiki_block_includes_both_files() -> None:
 
 
 def test_resolve_workspace_prefers_header() -> None:
-    resolved = resolve_workspace("/from/header", "/from/query", Path("/from/default"))
+    resolved = resolve_workspace("/from/header", "/from/query", "/from/body", Path("/from/default"))
     assert resolved == Path("/from/header").resolve()
+
+
+def test_workspace_from_body() -> None:
+    body = b'{"model":"x","reignit_workspace":"/srv/a","messages":[]}'
+    assert workspace_from_body(body) == "/srv/a"
+
+
+def test_strip_reignit_fields() -> None:
+    body = b'{"model":"x","reignit_workspace":"/srv/a"}'
+    cleaned = json.loads(strip_reignit_fields(body))
+    assert "reignit_workspace" not in cleaned
+    assert cleaned["model"] == "x"

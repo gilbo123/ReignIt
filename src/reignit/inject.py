@@ -13,14 +13,43 @@ from reignit.wiki import Wiki, load_wiki
 def resolve_workspace(
     header_value: str | None,
     query_value: str | None,
+    body_value: str | None,
     default: Path | None,
 ) -> Path | None:
-    for raw in (header_value, query_value):
+    for raw in (header_value, query_value, body_value):
         if raw:
             return Path(raw).expanduser().resolve()
     if default is not None:
         return default.expanduser().resolve()
     return None
+
+
+def workspace_from_body(body: bytes) -> str | None:
+    if not body:
+        return None
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("reignit_workspace")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
+
+
+def strip_reignit_fields(body: bytes) -> bytes:
+    if not body:
+        return body
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return body
+    if not isinstance(payload, dict) or "reignit_workspace" not in payload:
+        return body
+    cleaned = {key: value for key, value in payload.items() if key != "reignit_workspace"}
+    return json.dumps(cleaned).encode("utf-8")
 
 
 def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:

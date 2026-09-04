@@ -47,20 +47,64 @@ uv run reignit --help
 ## Usage
 
 ```bash
-# New or existing project — creates the two wiki files, does not overwrite
-uv run reignit init /path/to/project
+# Once per repo — creates wiki/functionality.md and wiki/history.md
+uv run reignit init /path/to/repo
 
 # Rescan modules after you add directories; keeps a hand-written overview
-uv run reignit refresh /path/to/project
+uv run reignit refresh /path/to/repo
 
-# Serve the harness (default workspace is injected when the client does not name one)
-uv run reignit serve --workspace /path/to/project
+# Start the home-server harness (no repo path needed)
+uv run reignit serve
 
-# Inspect what would be injected
-uv run reignit show /path/to/project
+# Inspect what would be injected for a repo
+uv run reignit show /path/to/repo
 ```
 
 `init` is safe to run twice. Use `--force` only when you want both files regenerated.
+
+Each repo keeps its own `wiki/*.md`. The harness loads them **per request** — it does not need a repo configured at serve time.
+
+### Home server (192.168.1.200)
+
+Run ReignIt on the same machine as Ollama. Defaults are set for a LAN home server:
+
+- listens on `0.0.0.0:11444` (reachable at `http://192.168.1.200:11444`)
+- proxies to Ollama at `http://127.0.0.1:11434` on that box
+
+```bash
+uv sync
+uv run reignit init /srv/repos/myapp      # repeat for each repo
+uv run reignit serve                      # one process, many repos
+```
+
+Clients on other machines point at `http://192.168.1.200:11444` and tell the harness **which repo's wiki** to load (see below).
+
+### Which repo's wiki?
+
+Paths must exist **on the server** (where ReignIt runs). Resolved per request, in order:
+
+1. `?workspace=/srv/repos/myapp` on the URL — works in VS Code `chatLanguageModels.json`
+2. `X-ReignIt-Workspace: /srv/repos/myapp` header
+3. `"reignit_workspace": "/srv/repos/myapp"` in the JSON body (stripped before Ollama sees it)
+4. optional fallback: `REIGNIT_WORKSPACE` or `--workspace` on serve
+
+If none is given, the request still reaches Ollama but the wiki block says "no workspace configured".
+
+**VS Code Insiders** — one model entry per repo, workspace in the URL:
+
+```json
+{
+  "name": "ReignIt — myapp",
+  "vendor": "customoai",
+  "models": [{
+    "name": "Qwen 3.8 27b",
+    "url": "http://192.168.1.200:11444?workspace=/srv/repos/myapp",
+    "id": "qwen3.8:27b"
+  }]
+}
+```
+
+Remove stray `customendpoint` / `apiType: "messages"` entries — ReignIt speaks OpenAI and Ollama APIs, not Anthropic Messages.
 
 ### Point a client at the harness
 
@@ -111,11 +155,12 @@ curl http://127.0.0.1:11444/api/chat \
 
 ### Workspace selection
 
-The wiki is read from a project directory, resolved in this order:
+The wiki is read from a project directory on the **server**, resolved per request:
 
-1. `X-ReignIt-Workspace: /path/to/project` request header
-2. `?workspace=/path/to/project` query parameter
-3. `--workspace` on `reignit serve` (or `REIGNIT_WORKSPACE`)
+1. `?workspace=/path/to/project` query parameter (easiest for VS Code)
+2. `X-ReignIt-Workspace: /path/to/project` request header
+3. `"reignit_workspace": "/path/to/project"` in the JSON body
+4. optional fallback: `--workspace` on `reignit serve` (or `REIGNIT_WORKSPACE`)
 
 Send `X-ReignIt-Wiki: false` to pass a request through untouched.
 
@@ -135,10 +180,11 @@ Environment variables (prefix `REIGNIT_`):
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `REIGNIT_HOST` | `127.0.0.1` | Bind address |
+| `REIGNIT_HOST` | `0.0.0.0` | Bind address |
 | `REIGNIT_PORT` | `11444` | Harness port |
+| `REIGNIT_PUBLIC_URL` | `http://192.168.1.200:11444` | URL shown in logs for LAN clients |
 | `REIGNIT_OLLAMA` | `http://127.0.0.1:11434` | Upstream Ollama |
-| `REIGNIT_WORKSPACE` | unset | Default project for wiki injection |
+| `REIGNIT_WORKSPACE` | unset | Optional fallback wiki path |
 
 ## Development
 
