@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -39,8 +40,8 @@ class _CapturingClient:
         return None
 
 
-def test_root_looks_like_ollama() -> None:
-    app = create_app(Settings())
+def test_root_looks_like_ollama(settings: Settings) -> None:
+    app = create_app(settings)
     with TestClient(app) as client:
         response = client.get("/")
         assert response.status_code == 200
@@ -48,9 +49,9 @@ def test_root_looks_like_ollama() -> None:
         assert client.head("/").status_code == 200
 
 
-def test_chat_completion_injects_wiki(tmp_path: Path) -> None:
+def test_chat_completion_injects_wiki(tmp_path: Path, settings: Settings) -> None:
     init_wiki(tmp_path)
-    app = create_app(Settings(workspace=tmp_path))
+    app = create_app(replace(settings, workspace=tmp_path))
     fake = _CapturingClient()
     with TestClient(app) as client:
         app.state.http = fake

@@ -32,17 +32,19 @@ On an existing project, init scans the tree (skipping `node_modules`, `.venv`, a
 
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/), Python 3.10+, and a running Ollama daemon (default `http://127.0.0.1:11434`).
+Requires [uv](https://docs.astral.sh/uv/), Python 3.11+, and Ollama on the home server.
 
 ```bash
 uv sync
 ```
 
-Run commands through uv (no manual venv activation needed):
+Edit `reignit.toml` once (IPs, ports, Ollama URL), then:
 
 ```bash
-uv run reignit --help
+uv run reignit serve
 ```
+
+Always run from the ReignIt repo root — that is where `reignit.toml` lives.
 
 ## Usage
 
@@ -66,10 +68,14 @@ Each repo keeps its own `wiki/*.md`. The harness loads them **per request** — 
 
 ### Home server (192.168.1.200)
 
-Run ReignIt on the same machine as Ollama. Defaults are set for a LAN home server:
+Run ReignIt on the same machine as Ollama. Set addresses in `reignit.toml`:
 
-- listens on `0.0.0.0:11444` (reachable at `http://192.168.1.200:11444`)
-- proxies to Ollama at `http://127.0.0.1:11434` on that box
+```toml
+host = "0.0.0.0"
+port = 11444
+public_url = "http://192.168.1.200:11444"
+ollama = "http://192.168.1.200:11434"
+```
 
 ```bash
 uv sync
@@ -86,7 +92,7 @@ Paths must exist **on the server** (where ReignIt runs). Resolved per request, i
 1. `?workspace=/srv/repos/myapp` on the URL — works in VS Code `chatLanguageModels.json`
 2. `X-ReignIt-Workspace: /srv/repos/myapp` header
 3. `"reignit_workspace": "/srv/repos/myapp"` in the JSON body (stripped before Ollama sees it)
-4. optional fallback: `REIGNIT_WORKSPACE` or `--workspace` on serve
+4. optional fallback: `workspace` in `reignit.toml`
 
 If none is given, the request still reaches Ollama but the wiki block says "no workspace configured".
 
@@ -176,15 +182,15 @@ Send `X-ReignIt-Wiki: false` to pass a request through untouched.
 
 ## Configuration
 
-Environment variables (prefix `REIGNIT_`):
+All server settings live in **`reignit.toml`** at the repo root. One file, no env vars, no CLI flags.
 
-| Variable | Default | Meaning |
+| Key | Example | Meaning |
 | --- | --- | --- |
-| `REIGNIT_HOST` | `0.0.0.0` | Bind address |
-| `REIGNIT_PORT` | `11444` | Harness port |
-| `REIGNIT_PUBLIC_URL` | `http://192.168.1.200:11444` | URL shown in logs for LAN clients |
-| `REIGNIT_OLLAMA` | `http://127.0.0.1:11434` | Upstream Ollama |
-| `REIGNIT_WORKSPACE` | unset | Optional fallback wiki path |
+| `host` | `0.0.0.0` | Bind address |
+| `port` | `11444` | Harness port |
+| `public_url` | `http://192.168.1.200:11444` | URL clients on the LAN use |
+| `ollama` | `http://192.168.1.200:11434` | Upstream Ollama |
+| `workspace` | `/srv/repos/myapp` | Optional fallback wiki path |
 
 ## Development
 

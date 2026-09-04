@@ -1,9 +1,4 @@
 DEFAULT_PORT = 11444
-DEFAULT_OLLAMA = "http://127.0.0.1:11434"
-# Listen on all interfaces so LAN clients can reach the home server.
-DEFAULT_HOST = "0.0.0.0"
-# Shown in startup logs; clients connect here (override with REIGNIT_PUBLIC_URL).
-DEFAULT_PUBLIC_URL = "http://192.168.1.200:11444"
 
 INJECT_PATHS = {
     ("POST", "/v1/chat/completions"),

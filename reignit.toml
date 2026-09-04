@@ -1,0 +1,10 @@
+# ReignIt server config. Edit this file, then: uv run reignit serve
+# Always run commands from this directory (the ReignIt repo root).
+
+host = "0.0.0.0"
+port = 11444
+public_url = "http://192.168.1.200:11444"
+ollama = "http://192.168.1.200:11434"
+
+# Optional fallback wiki when a request does not name a repo:
+# workspace = "/srv/repos/myapp"

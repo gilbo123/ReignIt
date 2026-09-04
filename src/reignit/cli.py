@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
 from reignit import FUNCTIONALITY_FILE, HISTORY_FILE, WIKI_DIR, __version__
-from reignit.config import Settings
-from reignit.constants import DEFAULT_HOST, DEFAULT_OLLAMA, DEFAULT_PORT, DEFAULT_PUBLIC_URL
+from reignit.config import load_settings
 from reignit.init_project import init_wiki, refresh_wiki
 from reignit.wiki import load_wiki
 
@@ -81,33 +79,15 @@ def refresh(
 
 
 @app.command()
-def serve(
-    host: str = typer.Option(DEFAULT_HOST, "--host", help="Bind address (default: all interfaces)."),
-    port: int = typer.Option(DEFAULT_PORT, "--port", help="Harness port."),
-    ollama: str = typer.Option(DEFAULT_OLLAMA, "--ollama", help="Upstream Ollama base URL."),
-    public_url: str = typer.Option(
-        DEFAULT_PUBLIC_URL,
-        "--public-url",
-        help="URL shown in logs for clients on the LAN.",
-    ),
-    workspace: Optional[Path] = typer.Option(
-        None,
-        "--workspace",
-        "-w",
-        exists=True,
-        file_okay=False,
-        resolve_path=True,
-        help="Optional fallback wiki path when a request does not name one.",
-    ),
-) -> None:
-    """Serve an OpenAI- and Ollama-compatible endpoint that injects per-request wikis."""
-    settings = Settings(
-        host=host,
-        port=port,
-        ollama=ollama,
-        public_url=public_url,
-        workspace=workspace,
-    )
+def serve() -> None:
+    """Serve the harness. All settings come from reignit.toml in the repo root."""
+    try:
+        settings = load_settings()
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"Config:  reignit.toml")
     typer.echo(f"Ollama:  {settings.ollama_base()}")
     typer.echo(f"Listen:  {settings.host}:{settings.port}")
     typer.echo(f"Clients: {settings.public_url}")
@@ -121,6 +101,7 @@ def serve(
                 f"Fallback path has no wiki: {settings.workspace / WIKI_DIR}",
                 err=True,
             )
+
     from reignit.server import run
 
     run(settings)

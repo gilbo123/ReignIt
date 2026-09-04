@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
 
 from reignit import SKIP_WIKI_HEADER, WORKSPACE_HEADER, __version__
-from reignit.config import Settings
+from reignit.config import Settings, load_settings
 from reignit.constants import HOP_BY_HOP, INJECT_PATHS
 from reignit.inject import (
     build_wiki_block,
@@ -24,7 +24,7 @@ from reignit.wiki import load_wiki
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or Settings()
+    settings = settings or load_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -126,7 +126,10 @@ async def _forward(app: FastAPI, request: Request, path: str) -> Response:
         return JSONResponse(
             {
                 "error": {
-                    "message": f"Cannot reach Ollama at {settings.ollama_base()}",
+                    "message": (
+                        f"Cannot reach Ollama at {settings.ollama_base()}. "
+                        "Check ollama in reignit.toml."
+                    ),
                     "type": "connection_error",
                 }
             },
