@@ -4,6 +4,7 @@ __version__ = "0.1.0"
 
 WIKI_DIR = "wiki"
 FUNCTIONALITY_FILE = "functionality.md"
+CURRENT_FILE = "current.md"
 HISTORY_FILE = "history.md"
 WIKI_BEGIN = "--- BEGIN REIGNIT WIKI ---"
 WIKI_END = "--- END REIGNIT WIKI ---"

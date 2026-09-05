@@ -4,18 +4,17 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from reignit import FUNCTIONALITY_FILE, HISTORY_FILE, WIKI_DIR
+from reignit import CURRENT_FILE, FUNCTIONALITY_FILE, HISTORY_FILE, WIKI_DIR
 from reignit.scan import infer_overview, infer_project_kind, scan_modules
 
 MODULES_START = "<!-- reignit:modules:start -->"
 MODULES_END = "<!-- reignit:modules:end -->"
-CURRENT_START = "<!-- reignit:current:start -->"
-CURRENT_END = "<!-- reignit:current:end -->"
 
 
 @dataclass(frozen=True)
 class Wiki:
     root: Path
+    current: str
     functionality: str
     history: str
     missing: tuple[str, ...] = ()
@@ -29,6 +28,10 @@ def wiki_dir(root: Path) -> Path:
     return root / WIKI_DIR
 
 
+def current_path(root: Path) -> Path:
+    return wiki_dir(root) / CURRENT_FILE
+
+
 def functionality_path(root: Path) -> Path:
     return wiki_dir(root) / FUNCTIONALITY_FILE
 
@@ -40,25 +43,48 @@ def history_path(root: Path) -> Path:
 def load_wiki(root: Path) -> Wiki:
     root = root.resolve()
     missing: list[str] = []
+    current = ""
     functionality = ""
     history = ""
 
-    func_file = functionality_path(root)
-    hist_file = history_path(root)
-    if func_file.is_file():
-        functionality = func_file.read_text(encoding="utf-8")
-    else:
-        missing.append(str(func_file))
-    if hist_file.is_file():
-        history = hist_file.read_text(encoding="utf-8")
-    else:
-        missing.append(str(hist_file))
+    for path, store in (
+        (current_path(root), "current"),
+        (functionality_path(root), "functionality"),
+        (history_path(root), "history"),
+    ):
+        if path.is_file():
+            text = path.read_text(encoding="utf-8").strip()
+            if store == "current":
+                current = text
+            elif store == "functionality":
+                functionality = text
+            else:
+                history = text
+        else:
+            missing.append(str(path))
 
     return Wiki(
         root=root,
-        functionality=functionality.strip(),
-        history=history.strip(),
+        current=current,
+        functionality=functionality,
+        history=history,
         missing=tuple(missing),
+    )
+
+
+def render_current() -> str:
+    return "\n".join(
+        [
+            "# Current work",
+            "",
+            "_Status: idle_",
+            "",
+            "_Live checklist — update this file before code changes and after each step._",
+            "",
+            "Goal:",
+            "",
+            "- [ ]",
+        ]
     )
 
 
@@ -76,22 +102,10 @@ def render_history(root: Path, *, existing_project: bool) -> str:
     lines = [
         "# History",
         "",
-        "Agent mode: update **Current work** before code changes; check items off after each step.",
-        "",
-        "## Current work",
-        "",
-        CURRENT_START,
-        "",
-        "_Status: idle_",
-        "",
-        "_No active task. When work starts, set goal + checklist here before editing code._",
-        "",
-        CURRENT_END,
-        "",
-        "## Log (newest first)",
+        "Completed work only — newest first. Active checklist lives in `wiki/current.md`.",
         "",
         f"### {today} — Wiki initialized",
-        f"- Created `{WIKI_DIR}/{FUNCTIONALITY_FILE}` and `{WIKI_DIR}/{HISTORY_FILE}`.",
+        f"- Created `{WIKI_DIR}/{CURRENT_FILE}`, `{FUNCTIONALITY_FILE}`, `{HISTORY_FILE}`.",
         f"- Project type: {kind}.",
     ]
     if existing_project:

@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from reignit.wiki import (
+    current_path,
     functionality_path,
     history_path,
     refresh_functionality,
+    render_current,
     render_functionality,
     render_history,
     wiki_dir,
@@ -24,40 +26,39 @@ def is_existing_project(root: Path) -> bool:
 
 
 def init_wiki(root: Path, *, force: bool = False) -> dict[str, str]:
-    """Create the two wiki files. Returns a map of relative path → action."""
+    """Create wiki files. Returns a map of relative path → action."""
     root = root.resolve()
     existing = is_existing_project(root)
     root.mkdir(parents=True, exist_ok=True)
     wiki_dir(root).mkdir(parents=True, exist_ok=True)
 
     actions: dict[str, str] = {}
-    func = functionality_path(root)
-    hist = history_path(root)
+    files = (
+        (functionality_path(root), render_functionality(root)),
+        (current_path(root), render_current()),
+        (history_path(root), render_history(root, existing_project=existing)),
+    )
 
-    func_existed = func.exists()
-    if func_existed and not force:
-        actions[str(func.relative_to(root))] = "exists"
-    else:
-        func.write_text(render_functionality(root), encoding="utf-8")
-        actions[str(func.relative_to(root))] = "replaced" if func_existed else "created"
-
-    hist_existed = hist.exists()
-    if hist_existed and not force:
-        actions[str(hist.relative_to(root))] = "exists"
-    else:
-        hist.write_text(render_history(root, existing_project=existing), encoding="utf-8")
-        actions[str(hist.relative_to(root))] = "replaced" if hist_existed else "created"
+    for path, content in files:
+        existed = path.exists()
+        if existed and not force:
+            actions[str(path.relative_to(root))] = "exists"
+        else:
+            path.write_text(content, encoding="utf-8")
+            actions[str(path.relative_to(root))] = "replaced" if existed else "created"
 
     return actions
 
 
+def ensure_wiki(root: Path) -> dict[str, str]:
+    """Create missing wiki files from defaults. Never overwrites existing content."""
+    return init_wiki(root, force=False)
+
+
 def refresh_wiki(root: Path) -> str:
     root = root.resolve()
+    ensure_wiki(root)
     func = functionality_path(root)
-    if not func.exists():
-        raise FileNotFoundError(
-            f"No {func.relative_to(root)} — run `reignit init` first."
-        )
     updated = refresh_functionality(func.read_text(encoding="utf-8"), root)
     func.write_text(updated, encoding="utf-8")
     return str(func.relative_to(root))

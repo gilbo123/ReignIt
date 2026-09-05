@@ -81,7 +81,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "version": __version__,
                 "ollama": settings.ollama_base(),
                 "workspace": str(settings.workspace) if settings.workspace else None,
-                "wiki_files": ["wiki/functionality.md", "wiki/history.md"],
+                "wiki_files": [
+                    "wiki/current.md",
+                    "wiki/functionality.md",
+                    "wiki/history.md",
+                ],
             }
         )
 

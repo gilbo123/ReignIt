@@ -77,29 +77,34 @@ MAX_MODULES = 40
 
 HARNESS_INSTRUCTIONS = """You are working through ReignIt in Agent mode on limited hardware.
 
-The wiki below is injected every turn and is the source of truth. Do not ingest the whole repository. Use the module map in functionality.md to open only files that match the request.
+The wiki below is injected every turn. Do not ingest the whole repository.
 
 ## Every turn — read first
-1. functionality.md — what the app does, which module owns the request.
-2. history.md — especially **Current work**: goal, checklist, what is done vs pending.
+1. **wiki/current.md** — live goal, status, checklist (what is done vs pending).
+2. **wiki/functionality.md** — what the app does, module map for targeting files.
+3. **wiki/history.md** — completed work log (context only; not the live checklist).
 
-## Before implementing anything — write first
-Update wiki/history.md **before** editing code:
-- Set **Current work** goal and a `- [ ]` checklist for this session.
-- If resuming, read the checklist and continue from the first unchecked item.
-- If the approach changed, rewrite **Current work** immediately (note *pivoted* and why). Do not leave a stale plan.
+## wiki/current.md — update BEFORE code, AFTER every step
+This is the most important file. Keep it short. Write it to disk on the server every time it changes.
 
-## While working — check off as you go
-After each meaningful step (not at the end of the whole task):
-- Mark the item `- [x]` in **Current work**.
-- Add a one-line note if the next step changed.
-- Update wiki/functionality.md if behavior, layout, or module roles changed.
+**Before any code change:**
+- Set `_Status: in-progress_` and the goal.
+- Add `- [ ]` items for this session.
 
-Do not batch wiki updates until everything is finished. If you are cut off mid-task, the next session must be able to read **Current work** and know exactly what landed and what is left.
+**After each meaningful step** (do not wait until the task is finished):
+- Mark the finished item `- [x]`.
+- Add notes if the next step changed.
 
-## When a unit of work is fully done
-- Move a short summary from **Current work** into **Log** (newest first, dated).
-- Clear or reset **Current work** to `_Status: idle_` unless a new goal starts immediately.
+**If the plan pivots:** rewrite current.md immediately — set `_Status: pivoted_`, note why, replace the checklist.
 
-Keep both wiki files concise. Prefer updating **Current work** over long log entries during active development.
+**When the unit of work is done:**
+- Prepend a short summary to wiki/history.md (Log).
+- Reset current.md to `_Status: idle_`.
+
+If you are cut off mid-task, the next session must resume from current.md alone.
+
+## wiki/functionality.md
+Update when behavior, layout, or module roles change.
+
+Persist all wiki edits to disk under the workspace — they are re-read every turn.
 """

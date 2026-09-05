@@ -7,6 +7,7 @@ from reignit.wiki import load_wiki
 def test_init_new_project(tmp_path: Path) -> None:
     empty = tmp_path / "blank"
     actions = init_wiki(empty)
+    assert actions["wiki/current.md"] == "created"
     assert actions["wiki/functionality.md"] == "created"
     assert actions["wiki/history.md"] == "created"
     wiki = load_wiki(empty)

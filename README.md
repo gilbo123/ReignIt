@@ -2,11 +2,12 @@
 
 Agentic harness for local models running with hardware maxed out.
 
-When a coding model has to ingest a large tree before it can decide anything, a loaded machine spends most of its time rereading context. ReignIt sits in front of [Ollama](https://ollama.com) and injects a two-file project wiki on every prompt so the model can see what the app does, where development left off, and which module to open — without chewing the whole filebase.
+When a coding model has to ingest a large tree before it can decide anything, a loaded machine spends most of its time rereading context. ReignIt sits in front of [Ollama](https://ollama.com) and injects a three-file project wiki on every prompt so the model can see what the app does, where development left off, and which module to open — without chewing the whole filebase.
 
 ```
 editor / client  →  :11444 ReignIt  →  :11434 Ollama
                          ↑
+                   wiki/current.md      ← live checklist
                    wiki/functionality.md
                    wiki/history.md
 ```
@@ -15,23 +16,24 @@ The harness presents as a normal LLM endpoint: Ollama's native API and the OpenA
 
 ## The wiki
 
-`reignit init` writes two files into the target project:
+`reignit` auto-seeds three wiki files on **first request** (no manual init). Use `reinit` to regenerate from scratch.
 
 | File | Role |
 | --- | --- |
-| `wiki/functionality.md` | What the app does, plus a **module map** (name, path, key files). A prompt like "update the UI" should resolve to one module. |
-| `wiki/history.md` | **Current work** checklist (live state) + **Log** of completed units. Read on every turn; update before implementing and check off as you go. |
+| `wiki/current.md` | **Live checklist** — goal, status, `- [ ]` / `- [x]` items. Update before code and after every step. |
+| `wiki/functionality.md` | What the app does, plus a **module map** (name, path, key files). |
+| `wiki/history.md` | **Log** of completed units only — not the live checklist. |
 
 The model is instructed to (Agent mode):
 
-1. Read the wiki every turn — especially **Current work** in `history.md`.
-2. **Write before implementing** — set goal + `- [ ]` checklist in **Current work** before editing code.
-3. **Check off after each step** — mark `- [x]` immediately, not when the whole task finishes.
-4. **Pivot in the wiki** — rewrite **Current work** if the plan changes.
+1. Read **current.md first** every turn — resume from the first unchecked item.
+2. **Write current.md before implementing** — goal + checklist.
+3. **Check off after each step** — mark `- [x]` immediately in current.md.
+4. **Pivot in current.md** if the plan changes.
 5. Update `functionality.md` when behavior or modules change.
-6. Move finished work from **Current work** into **Log** when a unit of work is done.
+6. Prepend finished work to `history.md`; reset `current.md` to idle.
 
-On an existing project, init scans the tree (skipping `node_modules`, `.venv`, and similar) and seeds the module map. If the repo has git history, recent commit subjects are copied into `history.md` for orientation.
+On first request to a workspace, the harness writes default wiki files (scanning the tree if the repo already exists). Use `reinit` to regenerate both files from scratch.
 
 ## Install
 
@@ -41,33 +43,20 @@ Requires [uv](https://docs.astral.sh/uv/), Python 3.11+, and Ollama on the home 
 uv sync
 ```
 
-Edit `reignit.toml` once (IPs, ports, Ollama URL), then:
-
-```bash
-uv run reignit serve
-```
-
-Always run from the ReignIt repo root — that is where `reignit.toml` lives.
+Edit `reignit.toml` once (IPs, ports, Ollama URL). Always run commands from the ReignIt repo root.
 
 ## Usage
 
 ```bash
-# Once per repo — creates wiki/functionality.md and wiki/history.md
-uv run reignit init /path/to/repo
-
-# Rescan modules after you add directories; keeps a hand-written overview
-uv run reignit refresh /path/to/repo
-
-# Start the home-server harness (no repo path needed)
-uv run reignit serve
-
-# Inspect what would be injected for a repo
-uv run reignit show /path/to/repo
+uv run reignit serve                              # start harness
+uv run reignit reinit /path/to/repo               # regenerate wiki from scratch
+uv run reignit refresh /path/to/repo              # rescan module map only
+uv run reignit show /path/to/repo                 # preview injected wiki
 ```
 
-`init` is safe to run twice. Use `--force` only when you want both files regenerated.
+No manual init. The first chat request with `?workspace=/path/on/server` creates `wiki/` if missing.
 
-Each repo keeps its own `wiki/*.md`. The harness loads them **per request** — it does not need a repo configured at serve time.
+Each repo keeps its own `wiki/*.md`. The harness loads them **per request**.
 
 ### Home server (192.168.1.200)
 
@@ -81,12 +70,10 @@ ollama = "http://192.168.1.200:11434"
 ```
 
 ```bash
-uv sync
-uv run reignit init /srv/repos/myapp      # repeat for each repo
-uv run reignit serve                      # one process, many repos
+uv run reignit serve    # one process, all repos — wiki auto-seeded per workspace
 ```
 
-Clients on other machines point at `http://192.168.1.200:11444` and tell the harness **which repo's wiki** to load (see below).
+Clients on other machines (VS Code, Claude Code, Continue) point at `http://192.168.1.200:11444` with `?workspace=/path/on/server`.
 
 ### Which repo's wiki?
 
@@ -98,6 +85,12 @@ Paths must exist **on the server** (where ReignIt runs). Resolved per request, i
 4. optional fallback: `workspace` in `reignit.toml`
 
 If none is given, the request still reaches Ollama but the wiki block says "no workspace configured".
+
+**Claude Code / VS Code from another machine** — the workspace path must exist **on the server**, not on your Mac. Point at the harness and pass the server-side repo path:
+
+```text
+http://192.168.1.200:11444/v1?workspace=/srv/repos/myapp
+```
 
 **VS Code Insiders** — one model entry per repo, workspace in the URL:
 
@@ -169,7 +162,7 @@ The wiki is read from a project directory on the **server**, resolved per reques
 1. `?workspace=/path/to/project` query parameter (easiest for VS Code)
 2. `X-ReignIt-Workspace: /path/to/project` request header
 3. `"reignit_workspace": "/path/to/project"` in the JSON body
-4. optional fallback: `--workspace` on `reignit serve` (or `REIGNIT_WORKSPACE`)
+4. optional fallback: `workspace` in `reignit.toml`
 
 Send `X-ReignIt-Wiki: false` to pass a request through untouched.
 

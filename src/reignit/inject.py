@@ -5,8 +5,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from reignit import WIKI_BEGIN, WIKI_END
+from reignit import CURRENT_FILE, FUNCTIONALITY_FILE, HISTORY_FILE, WIKI_BEGIN, WIKI_END
 from reignit.constants import HARNESS_INSTRUCTIONS
+from reignit.init_project import ensure_wiki
 from reignit.wiki import Wiki, load_wiki
 
 
@@ -53,15 +54,26 @@ def strip_reignit_fields(body: bytes) -> bytes:
 
 
 def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
-    if wiki is None or not wiki.present:
-        location = str(workspace) if workspace else "(no workspace configured)"
+    if workspace is None:
         return "\n".join(
             [
                 WIKI_BEGIN,
                 HARNESS_INSTRUCTIONS,
                 "",
-                f"No wiki found for workspace: {location}",
-                "Run `reignit init` in the project so functionality.md and history.md exist.",
+                "No workspace configured for this request.",
+                "Clients must pass ?workspace=/path/on/server, X-ReignIt-Workspace, or reignit_workspace in JSON.",
+                WIKI_END,
+            ]
+        )
+
+    if wiki is None or not wiki.present:
+        return "\n".join(
+            [
+                WIKI_BEGIN,
+                HARNESS_INSTRUCTIONS,
+                "",
+                f"Workspace: {workspace}",
+                "Wiki files could not be loaded. Check that wiki/ is writable on the server.",
                 WIKI_END,
             ]
         )
@@ -72,6 +84,11 @@ def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
             HARNESS_INSTRUCTIONS,
             "",
             f"Workspace: {wiki.root}",
+            "Update wiki files on disk after every checklist change — they are re-read every turn.",
+            "",
+            "## wiki/current.md  ← live checklist (update this most often)",
+            "",
+            wiki.current,
             "",
             "## wiki/functionality.md",
             "",
@@ -113,6 +130,7 @@ def inject_body(body: bytes, wiki_block: str, path: str) -> bytes:
 def wiki_for_workspace(workspace: Path | None) -> Wiki | None:
     if workspace is None:
         return None
+    ensure_wiki(workspace)
     return load_wiki(workspace)
 
 

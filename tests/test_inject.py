@@ -7,6 +7,7 @@ from reignit.inject import (
     inject_payload,
     resolve_workspace,
     strip_reignit_fields,
+    wiki_for_workspace,
     workspace_from_body,
 )
 from reignit.wiki import Wiki
@@ -15,8 +16,9 @@ from reignit.wiki import Wiki
 def _wiki() -> Wiki:
     return Wiki(
         root=Path("/tmp/demo"),
+        current="_Status: in-progress_\n\n- [x] read ui\n- [ ] wire form",
         functionality="## Modules\n\n### ui (`src/ui/`)\n",
-        history="## 2026-09-01 — started",
+        history="### 2026-09-01 — started",
     )
 
 
@@ -60,11 +62,25 @@ def test_inject_generate_sets_system() -> None:
     assert result["prompt"] == "hello"
 
 
-def test_build_wiki_block_includes_both_files() -> None:
+def test_wiki_for_workspace_seeds_missing_files(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    wiki = wiki_for_workspace(tmp_path)
+    assert wiki is not None
+    assert wiki.present
+    assert (tmp_path / "wiki" / "current.md").is_file()
+    assert (tmp_path / "wiki" / "functionality.md").is_file()
+    assert (tmp_path / "wiki" / "history.md").is_file()
+    assert "Current work" in wiki.current
+
+
+def test_build_wiki_block_no_workspace() -> None:
+    block = build_wiki_block(None, None)
+    assert "No workspace configured" in block
     block = build_wiki_block(_wiki(), Path("/tmp/demo"))
     assert WIKI_BEGIN in block
     assert WIKI_END in block
-    assert "wiki/functionality.md" in block
+    assert "wiki/current.md" in block
+    assert "live checklist" in block
     assert "src/ui/" in block
     assert "2026-09-01" in block
 

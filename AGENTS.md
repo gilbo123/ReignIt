@@ -2,5 +2,6 @@
 
 - Run all commands from the **repo root** (where `reignit.toml` lives).
 - Server settings go in **`reignit.toml` only** — not env vars, not CLI flags.
-- Per-repo wikis: `uv run reignit init /path/to/repo` then clients pass `?workspace=` on each request.
-- Agent mode wiki loop: read every turn; write **Current work** checklist before code; check off after each step; pivot in wiki if plan changes.
+- Wiki auto-seeds on first request per workspace; use `reinit` to regenerate from scratch.
+- Clients pass `?workspace=/path/on/server` — paths are on the home server, not the client Mac.
+- Agent mode wiki loop: **current.md** is the live checklist; update before code and after each step. history.md is log-only.
