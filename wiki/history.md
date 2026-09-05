@@ -1,10 +1,21 @@
 # History
 
-Newest entries first. Keep each entry to a few bullets, not a full diff.
+Agent mode: update **Current work** before code changes; check items off after each step.
 
-## 2026-09-02 — Harness scaffolded
+## Current work
+
+<!-- reignit:current:start -->
+
+_Status: idle_
+
+_No active task. When work starts, set goal + checklist here before editing code._
+
+<!-- reignit:current:end -->
+
+## Log (newest first)
+
+### 2026-09-02 — Harness scaffolded
 
 - Created the Python package (`reignit` CLI) with `init`, `refresh`, `serve`, and `show`.
-- Proxy on :11444 presents as Ollama (`GET /` → `Ollama is running`) and as OpenAI (`/v1/chat/completions`).
-- Wiki injection on chat/generate: functionality + history + targeting instructions.
-- `reignit init` writes `wiki/functionality.md` and `wiki/history.md` for new or existing projects; existing trees get a scanned module map and recent git subjects.
+- Proxy on :11444 presents as Ollama and OpenAI; wiki injected every request.
+- Config in `reignit.toml`; per-request workspace for multi-repo home server.

@@ -75,16 +75,31 @@ MAX_SCAN_DEPTH = 3
 MAX_FILES_PER_DIR = 24
 MAX_MODULES = 40
 
-HARNESS_INSTRUCTIONS = """You are working through ReignIt, a context harness for local models on limited hardware.
+HARNESS_INSTRUCTIONS = """You are working through ReignIt in Agent mode on limited hardware.
 
-The wiki below is the source of truth for this project. Do not ingest the whole repository. Use the module map to open only the files that match the user's request.
+The wiki below is injected every turn and is the source of truth. Do not ingest the whole repository. Use the module map in functionality.md to open only files that match the request.
 
-How to work:
-1. Read functionality.md (already included) to see what the app does and which module owns the request.
-2. Read history.md (already included) to see where development left off.
-3. Open only the paths listed for the target module(s). Example: "update the UI" means the ui module paths, not the whole tree.
-4. After you change behavior or layout, update wiki/functionality.md so the overview and module map stay accurate.
-5. After you finish a unit of work, prepend a short dated entry to wiki/history.md. A few bullets, not a diff.
+## Every turn — read first
+1. functionality.md — what the app does, which module owns the request.
+2. history.md — especially **Current work**: goal, checklist, what is done vs pending.
 
-Keep both wiki files short enough to reread on every fresh prompt.
+## Before implementing anything — write first
+Update wiki/history.md **before** editing code:
+- Set **Current work** goal and a `- [ ]` checklist for this session.
+- If resuming, read the checklist and continue from the first unchecked item.
+- If the approach changed, rewrite **Current work** immediately (note *pivoted* and why). Do not leave a stale plan.
+
+## While working — check off as you go
+After each meaningful step (not at the end of the whole task):
+- Mark the item `- [x]` in **Current work**.
+- Add a one-line note if the next step changed.
+- Update wiki/functionality.md if behavior, layout, or module roles changed.
+
+Do not batch wiki updates until everything is finished. If you are cut off mid-task, the next session must be able to read **Current work** and know exactly what landed and what is left.
+
+## When a unit of work is fully done
+- Move a short summary from **Current work** into **Log** (newest first, dated).
+- Clear or reset **Current work** to `_Status: idle_` unless a new goal starts immediately.
+
+Keep both wiki files concise. Prefer updating **Current work** over long log entries during active development.
 """

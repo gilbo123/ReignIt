@@ -20,13 +20,16 @@ The harness presents as a normal LLM endpoint: Ollama's native API and the OpenA
 | File | Role |
 | --- | --- |
 | `wiki/functionality.md` | What the app does, plus a **module map** (name, path, key files). A prompt like "update the UI" should resolve to one module. |
-| `wiki/history.md` | Short, newest-first development log — the same job as `git log`, small enough to reread on a fresh prompt. |
+| `wiki/history.md` | **Current work** checklist (live state) + **Log** of completed units. Read on every turn; update before implementing and check off as you go. |
 
-The model is instructed to:
+The model is instructed to (Agent mode):
 
-1. Use the module map to open only the files that match the request.
-2. Update `functionality.md` when behavior or layout changes.
-3. Prepend a brief entry to `history.md` when a unit of work is done.
+1. Read the wiki every turn — especially **Current work** in `history.md`.
+2. **Write before implementing** — set goal + `- [ ]` checklist in **Current work** before editing code.
+3. **Check off after each step** — mark `- [x]` immediately, not when the whole task finishes.
+4. **Pivot in the wiki** — rewrite **Current work** if the plan changes.
+5. Update `functionality.md` when behavior or modules change.
+6. Move finished work from **Current work** into **Log** when a unit of work is done.
 
 On an existing project, init scans the tree (skipping `node_modules`, `.venv`, and similar) and seeds the module map. If the repo has git history, recent commit subjects are copied into `history.md` for orientation.
 

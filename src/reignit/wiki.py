@@ -9,6 +9,8 @@ from reignit.scan import infer_overview, infer_project_kind, scan_modules
 
 MODULES_START = "<!-- reignit:modules:start -->"
 MODULES_END = "<!-- reignit:modules:end -->"
+CURRENT_START = "<!-- reignit:current:start -->"
+CURRENT_END = "<!-- reignit:current:end -->"
 
 
 @dataclass(frozen=True)
@@ -74,9 +76,21 @@ def render_history(root: Path, *, existing_project: bool) -> str:
     lines = [
         "# History",
         "",
-        "Newest entries first. Keep each entry to a few bullets, not a full diff.",
+        "Agent mode: update **Current work** before code changes; check items off after each step.",
         "",
-        f"## {today} — Wiki initialized",
+        "## Current work",
+        "",
+        CURRENT_START,
+        "",
+        "_Status: idle_",
+        "",
+        "_No active task. When work starts, set goal + checklist here before editing code._",
+        "",
+        CURRENT_END,
+        "",
+        "## Log (newest first)",
+        "",
+        f"### {today} — Wiki initialized",
         f"- Created `{WIKI_DIR}/{FUNCTIONALITY_FILE}` and `{WIKI_DIR}/{HISTORY_FILE}`.",
         f"- Project type: {kind}.",
     ]
