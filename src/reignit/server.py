@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
+from urllib.parse import parse_qsl, urlencode
 
 import httpx
 from fastapi import FastAPI, Request
@@ -11,16 +11,21 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response, Streami
 
 from reignit import SKIP_WIKI_HEADER, WORKSPACE_HEADER, __version__
 from reignit.config import Settings, load_settings
-from reignit.constants import HOP_BY_HOP, INJECT_PATHS
+from reignit.constants import HOP_BY_HOP, INJECT_SUFFIXES
 from reignit.inject import (
     build_wiki_block,
     inject_body,
+    prepare_for_ollama,
     resolve_workspace,
-    strip_reignit_fields,
+    should_inject,
     wiki_for_workspace,
     workspace_from_body,
+    workspace_from_model,
 )
 from reignit.wiki import load_wiki
+
+# VS Code probes POST-only OpenAI paths with GET; Ollama returns 405.
+_POST_ONLY_SUFFIXES = INJECT_SUFFIXES
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -48,7 +53,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/")
     async def root() -> PlainTextResponse:
-        # Continue, Cline, and other Ollama clients probe this string.
         return PlainTextResponse("Ollama is running")
 
     @app.head("/")
@@ -102,24 +106,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 async def _forward(app: FastAPI, request: Request, path: str) -> Response:
     settings: Settings = app.state.settings
     client: httpx.AsyncClient = app.state.http
-    inbound = await request.body()
-    skip_wiki = _skip_wiki(request)
     method = request.method.upper()
     target_path = path if path.startswith("/") else f"/{path}"
 
-    outbound = strip_reignit_fields(inbound)
-    if not skip_wiki and (method, target_path) in INJECT_PATHS:
-        workspace = resolve_workspace(
-            request.headers.get(WORKSPACE_HEADER),
-            request.query_params.get("workspace"),
-            workspace_from_body(inbound),
-            settings.workspace,
-        )
+    if _is_post_only_probe(method, target_path):
+        return _probe_ok(method)
+
+    inbound = await request.body()
+    skip_wiki = _skip_wiki(request)
+    workspace = resolve_workspace(
+        request.headers.get(WORKSPACE_HEADER),
+        request.query_params.get("workspace"),
+        workspace_from_body(inbound),
+        workspace_from_model(inbound),
+        settings.workspace,
+    )
+
+    outbound = prepare_for_ollama(inbound)
+    if not skip_wiki and should_inject(method, target_path):
         wiki = wiki_for_workspace(workspace)
-        outbound = inject_body(outbound, build_wiki_block(wiki, workspace), target_path)
+        outbound = inject_body(
+            outbound,
+            build_wiki_block(wiki, workspace),
+            target_path,
+            workspace,
+        )
 
     headers = _filter_headers(request.headers.items())
-    url = httpx.URL(path=target_path, query=request.url.query.encode("utf-8") or None)
+    url = httpx.URL(path=target_path, query=_ollama_query(request))
 
     try:
         upstream = await client.send(
@@ -165,6 +179,27 @@ async def _forward(app: FastAPI, request: Request, path: str) -> Response:
     )
 
 
+def _is_post_only_probe(method: str, path: str) -> bool:
+    if method not in {"GET", "HEAD", "OPTIONS"}:
+        return False
+    return any(path.endswith(suffix) for suffix in _POST_ONLY_SUFFIXES)
+
+
+def _probe_ok(method: str) -> Response:
+    if method == "OPTIONS":
+        return Response(status_code=204, headers={"Allow": "POST, OPTIONS"})
+    if method == "HEAD":
+        return Response(status_code=200)
+    return JSONResponse({"object": "list", "data": []})
+
+
+def _ollama_query(request: Request) -> bytes | None:
+    pairs = [(k, v) for k, v in parse_qsl(request.url.query) if k != "workspace"]
+    if not pairs:
+        return None
+    return urlencode(pairs).encode("utf-8")
+
+
 def _skip_wiki(request: Request) -> bool:
     value = request.headers.get(SKIP_WIKI_HEADER, "").strip().lower()
     return value in {"0", "false", "no", "off"}
@@ -196,9 +231,3 @@ def run(settings: Settings) -> None:
         port=settings.port,
         log_level="info",
     )
-
-
-def default_workspace(explicit: Path | None) -> Path | None:
-    if explicit is not None:
-        return explicit.expanduser().resolve()
-    return None

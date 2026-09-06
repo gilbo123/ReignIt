@@ -69,3 +69,11 @@ def test_chat_completion_injects_wiki(tmp_path: Path, settings: Settings) -> Non
     assert system["role"] == "system"
     assert "BEGIN REIGNIT WIKI" in system["content"]
     assert "functionality.md" in system["content"]
+
+
+def test_get_chat_completions_probe_ok(settings: Settings) -> None:
+    app = create_app(settings)
+    with TestClient(app) as client:
+        assert client.get("/v1/chat/completions").status_code == 200
+        assert client.get("/v1/chat/completions?workspace=/srv/a").status_code == 200
+        assert client.options("/v1/chat/completions").status_code == 204

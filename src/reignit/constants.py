@@ -1,11 +1,16 @@
 DEFAULT_PORT = 11444
 
-INJECT_PATHS = {
-    ("POST", "/v1/chat/completions"),
-    ("POST", "/v1/completions"),
-    ("POST", "/api/chat"),
-    ("POST", "/api/generate"),
-}
+INJECT_SUFFIXES = (
+    "/chat/completions",
+    "/completions",
+    "/api/chat",
+    "/api/generate",
+    "/responses",
+)
+
+USER_MANDATE = """[ReignIt] Workspace: {workspace}
+FIRST ACTION: update {current_file} on disk (set _Status: in-progress_, goal, checklist) BEFORE any other file edit or tool use.
+After each step: mark checklist items [x] in that same file."""
 
 HOP_BY_HOP = {
     "connection",

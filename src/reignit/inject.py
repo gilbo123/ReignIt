@@ -1,56 +1,84 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from reignit import CURRENT_FILE, FUNCTIONALITY_FILE, HISTORY_FILE, WIKI_BEGIN, WIKI_END
-from reignit.constants import HARNESS_INSTRUCTIONS
+from reignit import CURRENT_FILE, WIKI_BEGIN, WIKI_END
+from reignit.constants import HARNESS_INSTRUCTIONS, INJECT_SUFFIXES, USER_MANDATE
 from reignit.init_project import ensure_wiki
 from reignit.wiki import Wiki, load_wiki
 
+logger = logging.getLogger(__name__)
 
-def resolve_workspace(
-    header_value: str | None,
-    query_value: str | None,
-    body_value: str | None,
-    default: Path | None,
-) -> Path | None:
-    for raw in (header_value, query_value, body_value):
-        if raw:
-            return Path(raw).expanduser().resolve()
-    if default is not None:
-        return default.expanduser().resolve()
+_MODEL_WORKSPACE = re.compile(r"^(.+)@(/[^@]+)$")
+_SYSTEM_ROLES = frozenset({"system", "developer"})
+
+
+def should_inject(method: str, path: str) -> bool:
+    if method != "POST":
+        return False
+    return any(path.endswith(suffix) for suffix in INJECT_SUFFIXES)
+
+
+def resolve_workspace(*candidates: str | Path | None) -> Path | None:
+    for raw in candidates:
+        if raw is None:
+            continue
+        if isinstance(raw, Path):
+            return raw.expanduser().resolve()
+        text = raw.strip()
+        if text:
+            return Path(text).expanduser().resolve()
     return None
 
 
 def workspace_from_body(body: bytes) -> str | None:
-    if not body:
-        return None
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(payload, dict):
+    payload = _parse_json(body)
+    if not payload:
         return None
     raw = payload.get("reignit_workspace")
-    if isinstance(raw, str) and raw.strip():
-        return raw.strip()
-    return None
+    return raw.strip() if isinstance(raw, str) and raw.strip() else None
 
 
-def strip_reignit_fields(body: bytes) -> bytes:
-    if not body:
+def workspace_from_model(body: bytes) -> str | None:
+    payload = _parse_json(body)
+    if not payload:
+        return None
+    model = payload.get("model")
+    if not isinstance(model, str):
+        return None
+    _, path = parse_model_workspace(model)
+    return path
+
+
+def parse_model_workspace(model: str) -> tuple[str, str | None]:
+    match = _MODEL_WORKSPACE.match(model.strip())
+    if not match:
+        return model, None
+    return match.group(1).strip(), match.group(2)
+
+
+def prepare_for_ollama(body: bytes) -> bytes:
+    payload = _parse_json(body)
+    if not payload:
         return body
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
+    changed = False
+    if "reignit_workspace" in payload:
+        del payload["reignit_workspace"]
+        changed = True
+    model = payload.get("model")
+    if isinstance(model, str):
+        clean, _ = parse_model_workspace(model)
+        if clean != model:
+            payload["model"] = clean
+            changed = True
+    if not changed:
         return body
-    if not isinstance(payload, dict) or "reignit_workspace" not in payload:
-        return body
-    cleaned = {key: value for key, value in payload.items() if key != "reignit_workspace"}
-    return json.dumps(cleaned).encode("utf-8")
+    return json.dumps(payload).encode("utf-8")
 
 
 def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
@@ -61,7 +89,8 @@ def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
                 HARNESS_INSTRUCTIONS,
                 "",
                 "No workspace configured for this request.",
-                "Clients must pass ?workspace=/path/on/server, X-ReignIt-Workspace, or reignit_workspace in JSON.",
+                "Set workspace in reignit.toml, ?workspace=, X-ReignIt-Workspace, reignit_workspace in JSON,",
+                "or encode the server path in the model id: qwen3.8:27b@/srv/repos/myapp",
                 WIKI_END,
             ]
         )
@@ -78,13 +107,14 @@ def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
             ]
         )
 
+    wiki_root = wiki.root / "wiki"
     return "\n".join(
         [
             WIKI_BEGIN,
             HARNESS_INSTRUCTIONS,
             "",
             f"Workspace: {wiki.root}",
-            "Update wiki files on disk after every checklist change — they are re-read every turn.",
+            f"Write these paths on disk: {wiki_root / CURRENT_FILE}, {wiki_root / 'functionality.md'}, {wiki_root / 'history.md'}",
             "",
             "## wiki/current.md  ← live checklist (update this most often)",
             "",
@@ -103,10 +133,15 @@ def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
     )
 
 
-def inject_payload(payload: dict[str, Any], wiki_block: str, path: str) -> dict[str, Any]:
+def inject_payload(
+    payload: dict[str, Any],
+    wiki_block: str,
+    path: str,
+    workspace: Path | None,
+) -> dict[str, Any]:
     updated = deepcopy(payload)
-    if path.endswith("/chat/completions") or path.endswith("/api/chat"):
-        _inject_messages(updated, wiki_block)
+    if path.endswith("/chat/completions") or path.endswith("/responses") or path.endswith("/api/chat"):
+        _inject_messages(updated, wiki_block, workspace)
         if path.endswith("/api/chat"):
             _merge_ollama_system(updated, wiki_block)
     elif path.endswith("/completions") or path.endswith("/api/generate"):
@@ -114,16 +149,11 @@ def inject_payload(payload: dict[str, Any], wiki_block: str, path: str) -> dict[
     return updated
 
 
-def inject_body(body: bytes, wiki_block: str, path: str) -> bytes:
-    if not body:
+def inject_body(body: bytes, wiki_block: str, path: str, workspace: Path | None) -> bytes:
+    payload = _parse_json(body)
+    if not payload:
         return body
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        return body
-    if not isinstance(payload, dict):
-        return body
-    updated = inject_payload(payload, wiki_block, path)
+    updated = inject_payload(payload, wiki_block, path, workspace)
     return json.dumps(updated).encode("utf-8")
 
 
@@ -134,16 +164,21 @@ def wiki_for_workspace(workspace: Path | None) -> Wiki | None:
     return load_wiki(workspace)
 
 
-def _inject_messages(payload: dict[str, Any], wiki_block: str) -> None:
+def _inject_messages(
+    payload: dict[str, Any],
+    wiki_block: str,
+    workspace: Path | None,
+) -> None:
     messages = payload.get("messages")
     if not isinstance(messages, list):
         payload["messages"] = [{"role": "system", "content": wiki_block}]
         return
 
+    injected_system = False
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
             continue
-        if message.get("role") != "system":
+        if message.get("role") not in _SYSTEM_ROLES:
             continue
         content = _read_text(message.get("content"))
         if WIKI_BEGIN in content:
@@ -151,19 +186,44 @@ def _inject_messages(payload: dict[str, Any], wiki_block: str) -> None:
                 **message,
                 "content": _replace_or_prepend(content, wiki_block),
             }
+        else:
+            messages[index] = {
+                **message,
+                "content": f"{wiki_block}\n\n{content}".strip(),
+            }
+        injected_system = True
+        break
+
+    if not injected_system:
+        messages.insert(0, {"role": "system", "content": wiki_block})
+
+    if workspace is not None:
+        _prepend_user_mandate(messages, workspace)
+
+
+def _prepend_user_mandate(messages: list[Any], workspace: Path) -> None:
+    mandate = USER_MANDATE.format(
+        workspace=workspace,
+        current_file=workspace / "wiki" / CURRENT_FILE,
+    )
+    for index in range(len(messages) - 1, -1, -1):
+        message = messages[index]
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        content = _read_text(message.get("content"))
+        if mandate.splitlines()[0] in content:
             return
         messages[index] = {
             **message,
-            "content": f"{wiki_block}\n\n{content}".strip(),
+            "content": f"{mandate}\n\n{content}".strip(),
         }
         return
-
-    messages.insert(0, {"role": "system", "content": wiki_block})
 
 
 def _merge_ollama_system(payload: dict[str, Any], wiki_block: str) -> None:
     existing = payload.get("system")
     if not isinstance(existing, str) or not existing.strip():
+        payload["system"] = wiki_block
         return
     if WIKI_BEGIN in existing:
         payload["system"] = _replace_or_prepend(existing, wiki_block)
@@ -189,6 +249,16 @@ def _inject_completion(payload: dict[str, Any], wiki_block: str) -> None:
         return
     if isinstance(prompt, list):
         payload["prompt"] = [wiki_block, *prompt]
+
+
+def _parse_json(body: bytes) -> dict[str, Any] | None:
+    if not body:
+        return None
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _read_text(content: Any) -> str:

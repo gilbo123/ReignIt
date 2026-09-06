@@ -79,20 +79,15 @@ Clients on other machines (VS Code, Claude Code, Continue) point at `http://192.
 
 Paths must exist **on the server** (where ReignIt runs). Resolved per request, in order:
 
-1. `?workspace=/srv/repos/myapp` on the URL — works in VS Code `chatLanguageModels.json`
+1. **`model@/path` in the model id** — best for VS Code (`qwen3.8:27b@/srv/repos/myapp`)
 2. `X-ReignIt-Workspace: /srv/repos/myapp` header
-3. `"reignit_workspace": "/srv/repos/myapp"` in the JSON body (stripped before Ollama sees it)
-4. optional fallback: `workspace` in `reignit.toml`
+3. `"reignit_workspace": "/srv/repos/myapp"` in the JSON body
+4. `?workspace=/srv/repos/myapp` query parameter (avoid in VS Code `url` — causes 405 probes)
+5. optional fallback: `workspace` in `reignit.toml`
 
 If none is given, the request still reaches Ollama but the wiki block says "no workspace configured".
 
-**Claude Code / VS Code from another machine** — the workspace path must exist **on the server**, not on your Mac. Point at the harness and pass the server-side repo path:
-
-```text
-http://192.168.1.200:11444/v1?workspace=/srv/repos/myapp
-```
-
-**VS Code Insiders** — one model entry per repo, workspace in the URL:
+**VS Code Insiders** — base URL without query params; encode the server repo path in `id`:
 
 ```json
 {
@@ -100,11 +95,13 @@ http://192.168.1.200:11444/v1?workspace=/srv/repos/myapp
   "vendor": "customoai",
   "models": [{
     "name": "Qwen 3.8 27b",
-    "url": "http://192.168.1.200:11444?workspace=/srv/repos/myapp",
-    "id": "qwen3.8:27b"
+    "url": "http://192.168.1.200:11444/v1",
+    "id": "qwen3.8:27b@/srv/repos/myapp"
   }]
 }
 ```
+
+Do **not** put `?workspace=` in the VS Code `url` field — Insiders probes `/v1/chat/completions` with GET and used to get **405 method not allowed** (now handled by ReignIt, but `model@path` is still the reliable way to pass workspace).
 
 Remove stray `customendpoint` / `apiType: "messages"` entries — ReignIt speaks OpenAI and Ollama APIs, not Anthropic Messages.
 
