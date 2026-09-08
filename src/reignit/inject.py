@@ -9,8 +9,7 @@ from typing import Any
 
 from reignit import CURRENT_FILE, WIKI_BEGIN, WIKI_END
 from reignit.constants import HARNESS_INSTRUCTIONS, INJECT_SUFFIXES, USER_MANDATE
-from reignit.init_project import ensure_wiki
-from reignit.wiki import Wiki, load_wiki
+from reignit.wiki import Wiki, wiki_for_injection
 
 logger = logging.getLogger(__name__)
 
@@ -88,33 +87,36 @@ def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
                 WIKI_BEGIN,
                 HARNESS_INSTRUCTIONS,
                 "",
-                "No workspace configured for this request.",
-                "Set workspace in reignit.toml, ?workspace=, X-ReignIt-Workspace, reignit_workspace in JSON,",
-                "or encode the server path in the model id: qwen3.8:27b@/srv/repos/myapp",
+                "No project configured for this request.",
+                "Pass the project root per request:",
+                "- model id: qwen3.8:27b@/path/to/project",
+                "- header: X-ReignIt-Workspace: /path/to/project",
+                '- JSON body: "reignit_workspace": "/path/to/project"',
                 WIKI_END,
             ]
         )
 
     if wiki is None or not wiki.present:
+        wiki = wiki_for_injection(workspace)
+    if wiki is None:
         return "\n".join(
             [
                 WIKI_BEGIN,
                 HARNESS_INSTRUCTIONS,
                 "",
-                f"Workspace: {workspace}",
-                "Wiki files could not be loaded. Check that wiki/ is writable on the server.",
+                f"Project root: {workspace}",
+                "Wiki files could not be loaded. Check that wiki/ is writable.",
                 WIKI_END,
             ]
         )
 
-    wiki_root = wiki.root / "wiki"
     return "\n".join(
         [
             WIKI_BEGIN,
             HARNESS_INSTRUCTIONS,
             "",
-            f"Workspace: {wiki.root}",
-            f"Write these paths on disk: {wiki_root / CURRENT_FILE}, {wiki_root / 'functionality.md'}, {wiki_root / 'history.md'}",
+            f"Project root: `{wiki.root}` — read and write `wiki/current.md`, "
+            "`wiki/functionality.md`, and `wiki/history.md` here.",
             "",
             "## wiki/current.md  ← live checklist (update this most often)",
             "",
@@ -160,8 +162,7 @@ def inject_body(body: bytes, wiki_block: str, path: str, workspace: Path | None)
 def wiki_for_workspace(workspace: Path | None) -> Wiki | None:
     if workspace is None:
         return None
-    ensure_wiki(workspace)
-    return load_wiki(workspace)
+    return wiki_for_injection(workspace)
 
 
 def _inject_messages(
@@ -198,14 +199,11 @@ def _inject_messages(
         messages.insert(0, {"role": "system", "content": wiki_block})
 
     if workspace is not None:
-        _prepend_user_mandate(messages, workspace)
+        _prepend_user_mandate(messages)
 
 
-def _prepend_user_mandate(messages: list[Any], workspace: Path) -> None:
-    mandate = USER_MANDATE.format(
-        workspace=workspace,
-        current_file=workspace / "wiki" / CURRENT_FILE,
-    )
+def _prepend_user_mandate(messages: list[Any]) -> None:
+    mandate = USER_MANDATE
     for index in range(len(messages) - 1, -1, -1):
         message = messages[index]
         if not isinstance(message, dict) or message.get("role") != "user":

@@ -2,21 +2,71 @@
 
 Agentic harness for local models running with hardware maxed out.
 
-When a coding model has to ingest a large tree before it can decide anything, a loaded machine spends most of its time rereading context. ReignIt sits in front of [Ollama](https://ollama.com) and injects a three-file project wiki on every prompt so the model can see what the app does, where development left off, and which module to open — without chewing the whole filebase.
+When a coding model has to ingest a large tree before it can decide anything, a loaded machine spends most of its time rereading context. ReignIt sits in front of your **upstream LLM** and injects a three-file project wiki on every prompt so the model can see what the app does, where development left off, and which module to open — without chewing the whole filebase.
 
 ```
-editor / client  →  :11444 ReignIt  →  :11434 Ollama
+editor / client  →  :11444 ReignIt (local, wiki)  →  upstream LLM (remote or local)
                          ↑
                    wiki/current.md      ← live checklist
                    wiki/functionality.md
                    wiki/history.md
 ```
 
+ReignIt runs on your **dev machine** (where you edit code). Inference goes to whatever backend you configure — typically a remote GPU box, but also vLLM, or a paid OpenAI-compatible API.
+
 The harness presents as a normal LLM endpoint: Ollama's native API and the OpenAI-compatible `/v1` surface. VS Code (Continue, Cline), Aider, Open WebUI, and anything else that can point at a base URL can use it.
 
-## The wiki
+## Getting started
 
-`reignit` auto-seeds three wiki files on **first request** (no manual init). Use `reinit` to regenerate from scratch.
+1. **Clone ReignIt** on your dev machine (no GPU required here).
+
+```bash
+git clone …/ReignIt ~/git/ReignIt
+cd ~/git/ReignIt
+uv sync
+```
+
+2. **Edit `reignit.toml`** — set `upstream` to your LLM server:
+
+```toml
+host = "127.0.0.1"
+port = 11444
+public_url = "http://127.0.0.1:11444"
+upstream = "http://192.168.1.200:11434"   # Ollama on a GPU box
+# api_key = "sk-..."                      # optional — paid APIs
+```
+
+3. **Start the harness** (one process for all projects):
+
+```bash
+uv run reignit serve
+```
+
+4. **Point your editor** at the local harness and pass the **open project path** per request:
+
+```json
+{
+  "url": "http://127.0.0.1:11444/v1",
+  "id": "qwen3.8:27b@${workspaceFolder}"
+}
+```
+
+Switch VS Code windows → different project wiki on the next chat, no restart.
+
+The editor agent writes code and `wiki/` in whatever folder you have open. ReignIt reads the matching wiki when the request names that path.
+
+## Which project?
+
+Resolved **per request**, in order:
+
+1. **`model@/path` in the model id** — best for VS Code (`qwen3.8:27b@${workspaceFolder}`)
+2. `X-ReignIt-Workspace: /path/to/project` header
+3. `"reignit_workspace": "/path/to/project"` in the JSON body
+4. `?workspace=/path/to/project` query parameter (avoid in VS Code `url` — unnecessary)
+
+Wiki files are auto-seeded on the **first request** for each path.
+
+## The wiki
 
 | File | Role |
 | --- | --- |
@@ -33,94 +83,46 @@ The model is instructed to (Agent mode):
 5. Update `functionality.md` when behavior or modules change.
 6. Prepend finished work to `history.md`; reset `current.md` to idle.
 
-On first request to a workspace, the harness writes default wiki files (scanning the tree if the repo already exists). Use `reinit` to regenerate both files from scratch.
-
-## Install
-
-Requires [uv](https://docs.astral.sh/uv/), Python 3.11+, and Ollama on the home server.
-
-```bash
-uv sync
-```
-
-Edit `reignit.toml` once (IPs, ports, Ollama URL). Always run commands from the ReignIt repo root.
-
 ## Usage
 
-```bash
-uv run reignit serve                              # start harness
-uv run reignit reinit /path/to/repo               # regenerate wiki from scratch
-uv run reignit refresh /path/to/repo              # rescan module map only
-uv run reignit show /path/to/repo                 # preview injected wiki
-```
-
-No manual init. The first chat request with `?workspace=/path/on/server` creates `wiki/` if missing.
-
-Each repo keeps its own `wiki/*.md`. The harness loads them **per request**.
-
-### Home server (192.168.1.200)
-
-Run ReignIt on the same machine as Ollama. Set addresses in `reignit.toml`:
-
-```toml
-host = "0.0.0.0"
-port = 11444
-public_url = "http://192.168.1.200:11444"
-ollama = "http://192.168.1.200:11434"
-```
+Always run commands from the ReignIt repo root (where `reignit.toml` lives).
 
 ```bash
-uv run reignit serve    # one process, all repos — wiki auto-seeded per workspace
+uv run reignit serve                    # start harness (all projects)
+uv run reignit reinit /path/to/project  # regenerate wiki from scratch
+uv run reignit refresh /path/to/project # rescan module map only
+uv run reignit show /path/to/project    # preview injected wiki
 ```
 
-Clients on other machines (VS Code, Claude Code, Continue) point at `http://192.168.1.200:11444` with `?workspace=/path/on/server`.
-
-### Which repo's wiki?
-
-Paths must exist **on the server** (where ReignIt runs). Resolved per request, in order:
-
-1. **`model@/path` in the model id** — best for VS Code (`qwen3.8:27b@/srv/repos/myapp`)
-2. `X-ReignIt-Workspace: /srv/repos/myapp` header
-3. `"reignit_workspace": "/srv/repos/myapp"` in the JSON body
-4. `?workspace=/srv/repos/myapp` query parameter (avoid in VS Code `url` — causes 405 probes)
-5. optional fallback: `workspace` in `reignit.toml`
-
-If none is given, the request still reaches Ollama but the wiki block says "no workspace configured".
-
-**VS Code Insiders** — base URL without query params; encode the server repo path in `id`:
+### VS Code Insiders
 
 ```json
 {
-  "name": "ReignIt — myapp",
+  "name": "ReignIt",
   "vendor": "customoai",
   "models": [{
     "name": "Qwen 3.8 27b",
-    "url": "http://192.168.1.200:11444/v1",
-    "id": "qwen3.8:27b@/srv/repos/myapp"
+    "url": "http://127.0.0.1:11444/v1",
+    "id": "qwen3.8:27b@${workspaceFolder}",
+    "toolCalling": true
   }]
 }
 ```
 
-Do **not** put `?workspace=` in the VS Code `url` field — Insiders probes `/v1/chat/completions` with GET and used to get **405 method not allowed** (now handled by ReignIt, but `model@path` is still the reliable way to pass workspace).
+Do **not** put `?workspace=` in the VS Code `url` field — Insiders probes `/v1/chat/completions` with GET (ReignIt handles this; use `model@path` instead).
 
-Remove stray `customendpoint` / `apiType: "messages"` entries — ReignIt speaks OpenAI and Ollama APIs, not Anthropic Messages.
-
-### Point a client at the harness
-
-Keep using your usual model name. Change only the base URL.
+### Other clients
 
 **Continue** (`~/.continue/config.json`):
 
 ```json
 {
-  "models": [
-    {
-      "title": "ReignIt",
-      "provider": "ollama",
-      "model": "llama3.1",
-      "apiBase": "http://127.0.0.1:11444"
-    }
-  ]
+  "models": [{
+    "title": "ReignIt",
+    "provider": "ollama",
+    "model": "llama3.1",
+    "apiBase": "http://127.0.0.1:11444"
+  }]
 }
 ```
 
@@ -129,61 +131,51 @@ Keep using your usual model name. Change only the base URL.
 - Base URL: `http://127.0.0.1:11444/v1`
 - API key: any non-empty string (Ollama ignores it)
 
-**Aider:**
-
-```bash
-export OPENAI_API_BASE=http://127.0.0.1:11444/v1
-export OPENAI_API_KEY=ollama
-aider --model openai/llama3.1
-```
-
 **curl (OpenAI):**
 
 ```bash
 curl http://127.0.0.1:11444/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d '{"model":"llama3.1","messages":[{"role":"user","content":"update the UI"}]}'
+  -d '{"model":"llama3.1@/Users/you/git/MyApp","messages":[{"role":"user","content":"update the UI"}]}'
 ```
 
-**curl (Ollama):**
+Send `X-ReignIt-Wiki: false` to pass a request through without wiki injection.
 
-```bash
-curl http://127.0.0.1:11444/api/chat \
-  -d '{"model":"llama3.1","messages":[{"role":"user","content":"where did we leave off?"}]}'
-```
+### Upstream backends
 
-### Workspace selection
+ReignIt proxies to whatever URL you set as `upstream` (or legacy `ollama`). Use the API surface your backend speaks:
 
-The wiki is read from a project directory on the **server**, resolved per request:
+| Backend | `upstream` example | Client path | Notes |
+| --- | --- | --- | --- |
+| [Ollama](https://ollama.com) | `http://192.168.1.200:11434` | `/v1/...` or `/api/...` | Default for local/remote GPUs |
+| [vLLM](https://docs.vllm.ai/) | `http://gpu-box:8000` | `/v1/chat/completions` | OpenAI-compatible only |
+| OpenAI / compatible APIs | `https://api.openai.com` | `/v1/chat/completions` | Set `api_key` in `reignit.toml` |
 
-1. `?workspace=/path/to/project` query parameter (easiest for VS Code)
-2. `X-ReignIt-Workspace: /path/to/project` request header
-3. `"reignit_workspace": "/path/to/project"` in the JSON body
-4. optional fallback: `workspace` in `reignit.toml`
-
-Send `X-ReignIt-Wiki: false` to pass a request through untouched.
+If `api_key` is set in `reignit.toml`, ReignIt sends `Authorization: Bearer …` on upstream requests **when the client did not already send one**. Client-provided keys always win.
 
 ### Endpoints
 
 | Path | Behavior |
 | --- | --- |
-| `GET /` | `Ollama is running` — so Ollama-speaking clients accept the port |
-| `GET /health` | Harness status, Ollama reachability, wiki presence |
+| `GET /` | `Ollama is running` — compatibility probe for Ollama-speaking clients |
+| `GET /health` | Harness status and upstream reachability |
 | `GET /v1/models`, `POST /v1/chat/completions` | OpenAI-compatible; wiki injected on chat/completions |
 | `GET /api/tags`, `POST /api/chat`, `POST /api/generate` | Ollama-compatible; wiki injected on chat/generate |
-| everything else | Proxied to Ollama as-is (`/api/show`, embeddings, pull, …) |
+| everything else | Proxied upstream as-is |
 
 ## Configuration
 
-All server settings live in **`reignit.toml`** at the repo root. One file, no env vars, no CLI flags.
-
 | Key | Example | Meaning |
 | --- | --- | --- |
-| `host` | `0.0.0.0` | Bind address |
+| `host` | `127.0.0.1` | Bind address |
 | `port` | `11444` | Harness port |
-| `public_url` | `http://192.168.1.200:11444` | URL clients on the LAN use |
-| `ollama` | `http://192.168.1.200:11434` | Upstream Ollama |
-| `workspace` | `/srv/repos/myapp` | Optional fallback wiki path |
+| `public_url` | `http://127.0.0.1:11444` | URL your editor uses |
+| `upstream` | `http://192.168.1.200:11434` | Upstream LLM base URL (alias: `ollama`) |
+| `api_key` | `sk-…` | Optional bearer token for paid upstream APIs |
+
+Network settings live in **`reignit.toml`** only — not env vars, not CLI flags. Do not commit real API keys.
+
+Project path is **per request** — see [Which project?](#which-project) above.
 
 ## Development
 

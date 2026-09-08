@@ -4,7 +4,7 @@ from pathlib import Path
 
 import typer
 
-from reignit import CURRENT_FILE, FUNCTIONALITY_FILE, HISTORY_FILE, WIKI_DIR, __version__
+from reignit import CURRENT_FILE, FUNCTIONALITY_FILE, HISTORY_FILE, __version__
 from reignit.config import load_settings
 from reignit.init_project import ensure_wiki, init_wiki, refresh_wiki
 from reignit.wiki import load_wiki
@@ -42,7 +42,7 @@ def reinit(
         exists=False,
         file_okay=False,
         resolve_path=True,
-        help="Project directory on the server.",
+        help="Project directory.",
     ),
 ) -> None:
     """Regenerate wiki/functionality.md, wiki/current.md, and wiki/history.md."""
@@ -69,7 +69,7 @@ def refresh(
 
 @app.command()
 def serve() -> None:
-    """Serve the harness. All settings come from reignit.toml in the repo root."""
+    """Serve the harness. Network settings from reignit.toml; project path per request."""
     try:
         settings = load_settings()
     except FileNotFoundError as exc:
@@ -77,14 +77,10 @@ def serve() -> None:
         raise typer.Exit(code=1) from exc
 
     typer.echo("Config:  reignit.toml")
-    typer.echo(f"Ollama:  {settings.ollama_base()}")
+    typer.echo(f"Upstream: {settings.ollama_base()}")
     typer.echo(f"Listen:  {settings.host}:{settings.port}")
     typer.echo(f"Clients: {settings.public_url}")
-    typer.echo("Wiki:    auto-seeded on first request; pass ?workspace=/path/on/server")
-    if settings.workspace:
-        ensure_wiki(settings.workspace)
-        wiki = load_wiki(settings.workspace)
-        typer.echo(f"Fallback wiki: {settings.workspace / WIKI_DIR} ({'ok' if wiki.present else 'missing'})")
+    typer.echo("Wiki:    per request (model@/path, X-ReignIt-Workspace, or reignit_workspace)")
 
     from reignit.server import run
 

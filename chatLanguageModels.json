@@ -5,14 +5,14 @@
 		"models": [
 			{
 				"name": "Qwen 3.8 27b",
-				"url": "http://192.168.1.200:11444/v1",
+				"url": "http://127.0.0.1:11444/v1",
 				"toolCalling": true,
 				"vision": false,
 				"thinking": true,
 				"maxInputTokens": 131072,
 				"maxOutputTokens": 131072,
-				"description": "Qwen via ReignIt. Put server repo path in id after @.",
-				"id": "qwen3.8:27b@/srv/repos/myapp"
+				"description": "Qwen via local ReignIt. Encode open workspace in id after @.",
+				"id": "qwen3.8:27b@${workspaceFolder}"
 			}
 		]
 	},

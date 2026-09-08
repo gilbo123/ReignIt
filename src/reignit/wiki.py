@@ -72,6 +72,26 @@ def load_wiki(root: Path) -> Wiki:
     )
 
 
+def render_functionality_placeholder(name: str) -> str:
+    return "\n".join(
+        [
+            f"# Functionality — {name}",
+            "",
+            "_Describe what this application does. The agent should fill this in from the open project._",
+        ]
+    )
+
+
+def render_history_placeholder() -> str:
+    return "\n".join(
+        [
+            "# History",
+            "",
+            "Completed work only — newest first. Active checklist lives in `wiki/current.md`.",
+        ]
+    )
+
+
 def render_current() -> str:
     return "\n".join(
         [
@@ -85,6 +105,24 @@ def render_current() -> str:
             "",
             "- [ ]",
         ]
+    )
+
+
+def wiki_for_injection(root: Path) -> Wiki:
+    """Wiki content to inject. Reads from disk when the workspace exists on this machine."""
+    from reignit.init_project import ensure_wiki
+
+    root = root.resolve()
+    if root.is_dir():
+        ensure_wiki(root)
+        loaded = load_wiki(root)
+        if loaded.present:
+            return loaded
+    return Wiki(
+        root=root,
+        current=render_current(),
+        functionality=render_functionality(root) if root.is_dir() else render_functionality_placeholder(root.name),
+        history=render_history(root, existing_project=root.is_dir()) if root.is_dir() else render_history_placeholder(),
     )
 
 

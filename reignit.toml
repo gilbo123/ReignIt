@@ -1,10 +1,12 @@
-# ReignIt server config. Edit this file, then: uv run reignit serve
-# Always run commands from this directory (the ReignIt repo root).
+# ReignIt config. Then: uv run reignit serve
 
-host = "0.0.0.0"
+host = "127.0.0.1"
 port = 11444
-public_url = "http://192.168.1.200:11444"
-ollama = "http://192.168.1.200:11434"
+public_url = "http://127.0.0.1:11444"
 
-# Optional fallback wiki when a request does not name a repo:
-# workspace = "/srv/repos/myapp"
+# Upstream LLM base URL — Ollama, vLLM, or any OpenAI-compatible API.
+upstream = "http://192.168.1.200:11434"
+# ollama = "http://192.168.1.200:11434"   # alias for upstream
+
+# Optional — sent as Authorization: Bearer when the client does not provide one.
+# api_key = "sk-..."

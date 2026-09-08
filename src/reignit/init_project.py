@@ -51,7 +51,10 @@ def init_wiki(root: Path, *, force: bool = False) -> dict[str, str]:
 
 
 def ensure_wiki(root: Path) -> dict[str, str]:
-    """Create missing wiki files from defaults. Never overwrites existing content."""
+    """Create missing wiki files on disk when the workspace exists on this machine."""
+    root = root.resolve()
+    if not root.is_dir():
+        return {}
     return init_wiki(root, force=False)
 
 

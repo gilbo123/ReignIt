@@ -13,7 +13,7 @@ class Settings:
     port: int
     ollama: str
     public_url: str
-    workspace: Path | None = None
+    api_key: str | None = None
 
     def ollama_base(self) -> str:
         return self.ollama.rstrip("/")
@@ -29,11 +29,15 @@ def load_settings() -> Settings:
     with path.open("rb") as handle:
         data = tomllib.load(handle)
 
-    workspace = data.get("workspace")
+    upstream = data.get("upstream") or data.get("ollama")
+    if not upstream:
+        raise ValueError(f"{CONFIG_FILE} must set upstream (or ollama) to the LLM base URL.")
+
+    api_key = data.get("api_key")
     return Settings(
         host=str(data["host"]),
         port=int(data["port"]),
-        ollama=str(data["ollama"]),
+        ollama=str(upstream),
         public_url=str(data["public_url"]),
-        workspace=Path(workspace).expanduser() if workspace else None,
+        api_key=str(api_key).strip() if api_key else None,
     )

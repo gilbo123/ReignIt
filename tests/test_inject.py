@@ -78,19 +78,28 @@ def test_wiki_for_workspace_seeds_missing_files(tmp_path: Path) -> None:
 
 def test_build_wiki_block_no_workspace() -> None:
     block = build_wiki_block(None, None)
-    assert "No workspace configured" in block
+    assert "No project configured" in block
+    assert "model id:" in block
     block = build_wiki_block(_wiki(), Path("/tmp/demo"))
     assert WIKI_BEGIN in block
     assert WIKI_END in block
+    assert "Project root:" in block
     assert "wiki/current.md" in block
     assert "live checklist" in block
     assert "src/ui/" in block
     assert "2026-09-01" in block
+    assert "WORKING_DIR" not in block
+    assert "RUNNING_DIR" not in block
 
 
-def test_resolve_workspace_prefers_header() -> None:
-    resolved = resolve_workspace("/from/header", "/from/query", "/from/body", Path("/from/default"))
-    assert resolved == Path("/from/header").resolve()
+def test_resolve_workspace_prefers_model_path() -> None:
+    resolved = resolve_workspace(
+        "/from/model",
+        "/from/header",
+        "/from/body",
+        "/from/query",
+    )
+    assert resolved == Path("/from/model").resolve()
 
 
 def test_workspace_from_body() -> None:

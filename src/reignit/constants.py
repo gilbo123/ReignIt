@@ -8,9 +8,11 @@ INJECT_SUFFIXES = (
     "/responses",
 )
 
-USER_MANDATE = """[ReignIt] Workspace: {workspace}
-FIRST ACTION: update {current_file} on disk (set _Status: in-progress_, goal, checklist) BEFORE any other file edit or tool use.
-After each step: mark checklist items [x] in that same file."""
+USER_MANDATE = """[ReignIt] STOP — before any other file edit or tool use:
+1. Ensure `wiki/current.md` exists in the project root (create `wiki/` if missing).
+2. Set _Status: in-progress_, goal, and a - [ ] checklist in that file.
+3. After each step, update the same file and mark items [x].
+Use relative paths: wiki/current.md, wiki/functionality.md, wiki/history.md"""
 
 HOP_BY_HOP = {
     "connection",
@@ -90,26 +92,27 @@ The wiki below is injected every turn. Do not ingest the whole repository.
 3. **wiki/history.md** — completed work log (context only; not the live checklist).
 
 ## wiki/current.md — update BEFORE code, AFTER every step
-This is the most important file. Keep it short. Write it to disk on the server every time it changes.
+This is the most important file. Keep it short. Write it in the project root using relative paths.
 
 **Before any code change:**
-- Set `_Status: in-progress_` and the goal.
+- Create `wiki/` in the project root if it does not exist.
+- Set `_Status: in-progress_` and the goal in `wiki/current.md`.
 - Add `- [ ]` items for this session.
 
 **After each meaningful step** (do not wait until the task is finished):
-- Mark the finished item `- [x]`.
+- Mark the finished item `- [x]` in `wiki/current.md`.
 - Add notes if the next step changed.
 
-**If the plan pivots:** rewrite current.md immediately — set `_Status: pivoted_`, note why, replace the checklist.
+**If the plan pivots:** rewrite `wiki/current.md` immediately — set `_Status: pivoted_`, note why, replace the checklist.
 
 **When the unit of work is done:**
-- Prepend a short summary to wiki/history.md (Log).
-- Reset current.md to `_Status: idle_`.
+- Prepend a short summary to `wiki/history.md`.
+- Reset `wiki/current.md` to `_Status: idle_`.
 
-If you are cut off mid-task, the next session must resume from current.md alone.
+If you are cut off mid-task, the next session must resume from `wiki/current.md` alone.
 
 ## wiki/functionality.md
 Update when behavior, layout, or module roles change.
 
-Persist all wiki edits to disk under the workspace — they are re-read every turn.
+Use relative paths under the open project: `wiki/current.md`, `wiki/functionality.md`, `wiki/history.md`.
 """

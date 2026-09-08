@@ -22,7 +22,6 @@ from reignit.inject import (
     workspace_from_body,
     workspace_from_model,
 )
-from reignit.wiki import load_wiki
 
 # VS Code probes POST-only OpenAI paths with GET; Ollama returns 405.
 _POST_ONLY_SUFFIXES = INJECT_SUFFIXES
@@ -62,8 +61,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/health")
     async def health() -> JSONResponse:
         ollama_ok, ollama_detail = await _ollama_status(app.state.http)
-        workspace = settings.workspace
-        wiki = load_wiki(workspace) if workspace else None
         return JSONResponse(
             {
                 "status": "ok" if ollama_ok else "degraded",
@@ -72,8 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "ollama": settings.ollama_base(),
                 "ollama_reachable": ollama_ok,
                 "ollama_detail": ollama_detail,
-                "workspace": str(workspace) if workspace else None,
-                "wiki_present": bool(wiki and wiki.present),
+                "api_key_configured": bool(settings.api_key),
             }
         )
 
@@ -84,7 +80,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "name": "reignit",
                 "version": __version__,
                 "ollama": settings.ollama_base(),
-                "workspace": str(settings.workspace) if settings.workspace else None,
                 "wiki_files": [
                     "wiki/current.md",
                     "wiki/functionality.md",
@@ -115,11 +110,10 @@ async def _forward(app: FastAPI, request: Request, path: str) -> Response:
     inbound = await request.body()
     skip_wiki = _skip_wiki(request)
     workspace = resolve_workspace(
-        request.headers.get(WORKSPACE_HEADER),
-        request.query_params.get("workspace"),
-        workspace_from_body(inbound),
         workspace_from_model(inbound),
-        settings.workspace,
+        request.headers.get(WORKSPACE_HEADER),
+        workspace_from_body(inbound),
+        request.query_params.get("workspace"),
     )
 
     outbound = prepare_for_ollama(inbound)
@@ -132,7 +126,7 @@ async def _forward(app: FastAPI, request: Request, path: str) -> Response:
             workspace,
         )
 
-    headers = _filter_headers(request.headers.items())
+    headers = _upstream_headers(request, settings)
     url = httpx.URL(path=target_path, query=_ollama_query(request))
 
     try:
@@ -203,6 +197,13 @@ def _ollama_query(request: Request) -> bytes | None:
 def _skip_wiki(request: Request) -> bool:
     value = request.headers.get(SKIP_WIKI_HEADER, "").strip().lower()
     return value in {"0", "false", "no", "off"}
+
+
+def _upstream_headers(request: Request, settings: Settings) -> dict[str, str]:
+    headers = _filter_headers(request.headers.items())
+    if settings.api_key and not any(key.lower() == "authorization" for key in headers):
+        headers["authorization"] = f"Bearer {settings.api_key}"
+    return headers
 
 
 def _filter_headers(items: list[tuple[str, str]] | object) -> dict[str, str]:
