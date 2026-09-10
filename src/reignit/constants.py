@@ -8,11 +8,15 @@ INJECT_SUFFIXES = (
     "/responses",
 )
 
-USER_MANDATE = """[ReignIt] STOP — before any other file edit or tool use:
-1. Ensure `wiki/current.md` exists in the project root (create `wiki/` if missing).
-2. Set _Status: in-progress_, goal, and a - [ ] checklist in that file.
-3. After each step, update the same file and mark items [x].
-Use relative paths: wiki/current.md, wiki/functionality.md, wiki/history.md"""
+USER_MANDATE = """[ReignIt] STOP — before any other file edit or tool use (including config, nginx, README, or code):
+1. Create `wiki/` in the project root if it does not exist.
+2. Write or update `wiki/current.md`: _Status: in-progress_, the goal, and a - [ ] checklist for this session.
+3. Only then begin the user's task. After each step, mark items [x] in `wiki/current.md`.
+Paths: wiki/current.md, wiki/functionality.md, wiki/history.md"""
+
+NEW_PROJECT_WIKI_NOTICE = """## New project — wiki first (mandatory)
+No wiki existed yet. Starter files are on disk under `wiki/`.
+Do **not** create application or config files until you have updated `wiki/current.md` with _Status: in-progress_, the goal, and a checklist for this session."""
 
 HOP_BY_HOP = {
     "connection",
@@ -94,10 +98,11 @@ The wiki below is injected every turn. Do not ingest the whole repository.
 ## wiki/current.md — update BEFORE code, AFTER every step
 This is the most important file. Keep it short. Write it in the project root using relative paths.
 
-**Before any code change:**
+**Before any file change** (code, config, nginx, docs, etc.):
 - Create `wiki/` in the project root if it does not exist.
 - Set `_Status: in-progress_` and the goal in `wiki/current.md`.
 - Add `- [ ]` items for this session.
+- This applies even to small or greenfield tasks.
 
 **After each meaningful step** (do not wait until the task is finished):
 - Mark the finished item `- [x]` in `wiki/current.md`.

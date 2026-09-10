@@ -70,10 +70,38 @@ def test_wiki_for_workspace_seeds_missing_files(tmp_path: Path) -> None:
     wiki = wiki_for_workspace(tmp_path)
     assert wiki is not None
     assert wiki.present
+    assert wiki.freshly_seeded
     assert (tmp_path / "wiki" / "current.md").is_file()
     assert (tmp_path / "wiki" / "functionality.md").is_file()
     assert (tmp_path / "wiki" / "history.md").is_file()
     assert "Current work" in wiki.current
+
+
+def test_blank_project_seeds_wiki_and_shows_new_project_notice(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# new project\n")
+    (tmp_path / ".gitignore").write_text("*\n")
+    wiki = wiki_for_workspace(tmp_path)
+    assert wiki is not None
+    assert wiki.freshly_seeded
+    block = build_wiki_block(wiki, tmp_path)
+    assert "New project — wiki first" in block
+    assert "Do **not** create application or config files" in block
+
+
+def test_existing_wiki_not_marked_fresh(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    first = wiki_for_workspace(tmp_path)
+    assert first is not None and first.freshly_seeded
+    second = wiki_for_workspace(tmp_path)
+    assert second is not None
+    assert not second.freshly_seeded
+
+
+def test_mandate_prepended_even_without_workspace() -> None:
+    payload = {"model": "llama3", "messages": [{"role": "user", "content": "set up nginx"}]}
+    result = inject_payload(payload, "WIKI", "/v1/chat/completions", None)
+    assert "[ReignIt]" in result["messages"][-1]["content"]
+    assert "nginx" in result["messages"][-1]["content"]
 
 
 def test_build_wiki_block_no_workspace() -> None:

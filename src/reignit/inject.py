@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from reignit import CURRENT_FILE, WIKI_BEGIN, WIKI_END
-from reignit.constants import HARNESS_INSTRUCTIONS, INJECT_SUFFIXES, USER_MANDATE
+from reignit.constants import (
+    HARNESS_INSTRUCTIONS,
+    INJECT_SUFFIXES,
+    NEW_PROJECT_WIKI_NOTICE,
+    USER_MANDATE,
+)
 from reignit.wiki import Wiki, wiki_for_injection
 
 logger = logging.getLogger(__name__)
@@ -110,13 +115,17 @@ def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
             ]
         )
 
-    return "\n".join(
+    lines = [
+        WIKI_BEGIN,
+        HARNESS_INSTRUCTIONS,
+        "",
+        f"Project root: `{wiki.root}` — read and write `wiki/current.md`, "
+        "`wiki/functionality.md`, and `wiki/history.md` here.",
+    ]
+    if wiki.freshly_seeded:
+        lines.extend(["", NEW_PROJECT_WIKI_NOTICE])
+    lines.extend(
         [
-            WIKI_BEGIN,
-            HARNESS_INSTRUCTIONS,
-            "",
-            f"Project root: `{wiki.root}` — read and write `wiki/current.md`, "
-            "`wiki/functionality.md`, and `wiki/history.md` here.",
             "",
             "## wiki/current.md  ← live checklist (update this most often)",
             "",
@@ -133,6 +142,7 @@ def build_wiki_block(wiki: Wiki | None, workspace: Path | None) -> str:
             WIKI_END,
         ]
     )
+    return "\n".join(lines)
 
 
 def inject_payload(
@@ -198,8 +208,7 @@ def _inject_messages(
     if not injected_system:
         messages.insert(0, {"role": "system", "content": wiki_block})
 
-    if workspace is not None:
-        _prepend_user_mandate(messages)
+    _prepend_user_mandate(messages)
 
 
 def _prepend_user_mandate(messages: list[Any]) -> None:

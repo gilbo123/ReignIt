@@ -18,6 +18,7 @@ class Wiki:
     functionality: str
     history: str
     missing: tuple[str, ...] = ()
+    freshly_seeded: bool = False
 
     @property
     def present(self) -> bool:
@@ -109,20 +110,29 @@ def render_current() -> str:
 
 
 def wiki_for_injection(root: Path) -> Wiki:
-    """Wiki content to inject. Reads from disk when the workspace exists on this machine."""
+    """Wiki content to inject. Seeds missing wiki/ on disk when the workspace exists."""
     from reignit.init_project import ensure_wiki
 
     root = root.resolve()
     if root.is_dir():
-        ensure_wiki(root)
+        actions = ensure_wiki(root)
+        freshly_seeded = any(action == "created" for action in actions.values())
         loaded = load_wiki(root)
         if loaded.present:
-            return loaded
+            return Wiki(
+                root=loaded.root,
+                current=loaded.current,
+                functionality=loaded.functionality,
+                history=loaded.history,
+                missing=loaded.missing,
+                freshly_seeded=freshly_seeded,
+            )
     return Wiki(
         root=root,
         current=render_current(),
         functionality=render_functionality(root) if root.is_dir() else render_functionality_placeholder(root.name),
         history=render_history(root, existing_project=root.is_dir()) if root.is_dir() else render_history_placeholder(),
+        freshly_seeded=False,
     )
 
 
