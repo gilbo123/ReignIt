@@ -5,7 +5,7 @@ port = 11444
 public_url = "http://127.0.0.1:11444"
 
 # Upstream LLM base URL — Ollama, vLLM, or any OpenAI-compatible API.
-upstream = "http://192.168.1.200:8080"
+upstream = "http://192.168.1.200:11434"
 # ollama = "http://192.168.1.200:11434"   # alias for upstream
 
 # Optional — sent as Authorization: Bearer when the client does not provide one.
